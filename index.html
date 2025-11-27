@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial Prisoner's Dilemma</title>
+    <!-- Link to Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Link to Chart.js for the f_c graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom styles for the grid visualization */
+        .grid-container {
+            display: grid;
+            border: 1px solid #374151; /* Darker border */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .cell {
+            aspect-ratio: 1 / 1; /* Ensures cells are square */
+            font-size: 0; /* Hide any internal text */
+        }
+        /* Defined colors from the MATLAB code transitions: */
+        /* C->C (1): blue */
+        .cc { background-color: #0000ff; }
+        /* C->D (2): green */
+        .cd { background-color: #00ff00; }
+        /* D->C (3): yellow */
+        .dc { background-color: #ffff00; }
+        /* D->D (4): red */
+        .dd { background-color: #ff0000; }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 sm:p-8 font-sans">
+
+    <h1 class="text-4xl font-extrabold mb-6 text-center text-gray-800">Spatial Prisoner's Dilemma</h1>
+    <p class="text-center text-gray-500 mb-8">Evolution of Cooperation on a 2D Grid</p>
+
+    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
+        <!-- Input Panel -->
+        <div class="lg:w-1/4 bg-white p-6 rounded-xl shadow-2xl h-fit border border-gray-200">
+            <h2 class="text-2xl font-bold mb-4 text-blue-700 border-b pb-2">Control Panel</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="bInput" class="block text-sm font-medium text-gray-700">Defection Payoff (T = b):</label>
+                    <input type="number" id="bInput" value="1.66" step="0.1" min="1.0" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Standard range: $1 < b < 2$</p>
+                </div>
+                <div>
+                    <label for="nInput" class="block text-sm font-medium text-gray-700">Lattice Size (N x N):</label>
+                    <input type="number" id="nInput" value="50" step="10" min="20" max="100" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                </div>
+                <div>
+                    <label for="roundsInput" class="block text-sm font-medium text-gray-700">Total Rounds:</label>
+                    <input type="number" id="roundsInput" value="200" step="100" min="100" max="5000" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                </div>
+                <div>
+                    <label for="pInput" class="block text-sm font-medium text-gray-700">Initial Defectors Proportion (p):</label>
+                    <input type="number" id="pInput" value="0.1" step="0.1" min="0.0" max="1.0" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                </div>
+                <div>
+                    <label for="delayInput" class="block text-sm font-medium text-gray-700">Visualization Delay (ms):</label>
+                    <input type="number" id="delayInput" value="50" step="10" min="0" max="500" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    <p class="text-xs text-gray-500 mt-1">Set to 0ms for instant result (fastest).</p>
+                </div>
+                
+                <div class="flex space-x-2">
+                    <button onclick="runSimulation()" id="runButton" class="w-2/3 py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150">
+                        Run Simulation
+                    </button>
+                    <button onclick="stopSimulation()" id="stopButton" class="w-1/3 py-2 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-red-500 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-400 transition duration-150" disabled>
+                        Stop
+                    </button>
+                </div>
+
+                <div id="statusMessage" class="text-center text-sm font-semibold mt-2 p-2 rounded-lg">Awaiting input...</div>
+            </div>
+        </div>
+
+        <!-- Visualization Panel -->
+        <div class="lg:w-3/4 bg-white p-6 rounded-xl shadow-2xl border border-gray-200">
+            <div class="flex flex-col xl:flex-row gap-6">
+                <!-- Lattice Visualization -->
+                <div class="xl:w-1/2">
+                    <h2 class="text-2xl font-bold mb-4 text-center text-gray-800">Spatial Chaos (Round: <span id="currentRound">0</span>)</h2>
+                    <div id="gridVisualization" class="grid-container w-full aspect-square mx-auto">
+                        <!-- Grid cells will be inserted here by JavaScript -->
+                    </div>
+                    <div class="mt-4 flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-sm text-gray-600">
+                        <span class="flex items-center"><div class="w-4 h-4 rounded mr-1 bg-[#0000ff]"></div> C → C (Blue)</span>
+                        <span class="flex items-center"><div class="w-4 h-4 rounded mr-1 bg-[#00ff00]"></div> C → D (Green)</span>
+                        <span class="flex items-center"><div class="w-4 h-4 rounded mr-1 bg-[#ffff00]"></div> D → C (Yellow)</span>
+                        <span class="flex items-center"><div class="w-4 h-4 rounded mr-1 bg-[#ff0000]"></div> D → D (Red)</span>
+                    </div>
+                </div>
+
+                <!-- Frequency Graph -->
+                <div class="xl:w-1/2 flex flex-col justify-center">
+                    <h2 class="text-2xl font-bold mb-4 text-center text-gray-800">Fraction of Cooperators</h2>
+                    <div class="relative h-96">
+                        <canvas id="fcChart" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State and Simulation Parameters ---
+        // Changed const/let to var for global identifiers to prevent SyntaxError on script reload
+        var simulationTimerId = null; 
+        var R = 1; // Reward for Mutual Cooperation
+        var S = 0; // Sucker's Payoff
+        var P = 0; // Punishment for Mutual Defection
+        
+        // Strategy Mapping: 1=Cooperate (C), 2=Defect (D)
+        
+        // Transition Classification for Coloring (New_Strategy | Old_Strategy)
+        const TRANSITIONS = {
+            '1_1': 'cc', // C | C (1) - Blue
+            '2_1': 'cd', // D | C (2) - Green (C changes to D)
+            '1_2': 'dc', // C | D (3) - Yellow (D changes to C)
+            '2_2': 'dd'  // D | D (4) - Red
+        };
+        
+        // 8 Neighbors relative indices (Moore Neighborhood)
+        const NEIGHBORS = [
+            [-1, -1], [-1, 0], [-1, 1],
+            [ 0, -1],          [ 0, 1],
+            [ 1, -1], [ 1, 0], [ 1, 1]
+        ];
+
+        var fcChart; // Chart.js instance (changed from let)
+
+        // Helper function to set UI state
+        function setUIState(running) {
+            document.getElementById('runButton').disabled = running;
+            document.getElementById('stopButton').disabled = !running;
+            document.getElementById('bInput').disabled = running;
+            document.getElementById('nInput').disabled = running;
+            document.getElementById('roundsInput').disabled = running;
+            document.getElementById('pInput').disabled = running;
+            document.getElementById('delayInput').disabled = running;
+            
+            const statusElement = document.getElementById('statusMessage');
+            if (running) {
+                statusElement.textContent = "Simulation running...";
+                statusElement.className = "text-center text-sm font-semibold mt-2 p-2 rounded-lg bg-yellow-100 text-yellow-800";
+            } else if (simulationTimerId === null) {
+                statusElement.textContent = "Awaiting input...";
+                statusElement.className = "text-center text-sm font-semibold mt-2 p-2 rounded-lg";
+            } else {
+                statusElement.textContent = `Simulation stopped at Round ${document.getElementById('currentRound').textContent}.`;
+                statusElement.className = "text-center text-sm font-semibold mt-2 p-2 rounded-lg bg-blue-100 text-blue-800";
+            }
+        }
+
+        // Function to initialize the Chart.js graph
+        function initializeChart(rounds) {
+            const ctx = document.getElementById('fcChart').getContext('2d');
+            
+            if (fcChart) {
+                fcChart.destroy(); // Destroy existing chart before creating a new one
+            }
+
+            fcChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: rounds}, (_, i) => i + 1), // X-axis rounds
+                    datasets: [{
+                        label: 'Fraction of Cooperators (f_c)',
+                        data: [],
+                        borderColor: '#dc2626', // Red color
+                        borderWidth: 1.5,
+                        pointRadius: 0, 
+                        fill: false,
+                        tension: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Round'
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Fraction of sites occupied by C '
+                            },
+                            min: 0,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        // Function to stop the simulation manually
+        function stopSimulation() {
+            clearTimeout(simulationTimerId);
+            simulationTimerId = 'stopped'; // Use a string to indicate manual stop
+            setUIState(false);
+        }
+
+        // Function to run the simulation
+        function runSimulation() {
+            // Clear any previous running simulation
+            if (simulationTimerId) {
+                clearTimeout(simulationTimerId);
+            }
+            simulationTimerId = null;
+
+            const b = parseFloat(document.getElementById('bInput').value);
+            const n = parseInt(document.getElementById('nInput').value);
+            const rounds = parseInt(document.getElementById('roundsInput').value);
+            const p = parseFloat(document.getElementById('pInput').value);
+            const delay = parseInt(document.getElementById('delayInput').value);
+            
+            // Set Defection Payoff T
+            const T = b; 
+            // R, S, P are accessed from the global var declarations
+            const PAYOFF_MATRIX = [
+                [R, S], // C-Row (vs C, vs D)
+                [T, P]  // D-Row (vs C, vs D)
+            ];
+
+            // Validation 
+            if (b <= R) {
+                document.getElementById('statusMessage').textContent = "Error: Defection payoff (T=b) must be > 1 (R=1). The game is not a PD otherwise.";
+                document.getElementById('statusMessage').className = "text-center text-sm font-semibold mt-2 p-2 rounded-lg bg-red-100 text-red-800";
+                return;
+            }
+
+            setUIState(true);
+
+            // 1=Cooperate, 2=Defect
+            let lattice = []; 
+            let fcValues = [];
+            const nn = n * n;
+            
+            // 1. Initial Lattice Setup (Random distribution based on p)
+            const gridContainer = document.getElementById('gridVisualization');
+            gridContainer.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+            gridContainer.innerHTML = '';
+            document.getElementById('currentRound').textContent = 0;
+
+
+            for (let i = 0; i < n; i++) {
+                lattice[i] = [];
+                for (let j = 0; j < n; j++) {
+                    // Start as C (1) if Math.random() >= p, else D (2)
+                    const strategy = (Math.random() >= p) ? 1 : 2;
+                    lattice[i][j] = strategy;
+                    
+                    // Create and initialize cell visualization (D->D transition for initial Defectors, C->C for initial Cooperators)
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${strategy === 1 ? 'cc' : 'dd'}`; // Use the "no-change" color for initial state
+                    cell.id = `cell-${i * n + j}`;
+                    gridContainer.appendChild(cell);
+                }
+            }
+            
+            // Initialize the graph
+            initializeChart(rounds);
+
+
+            // Start simulation rounds
+            let currentRound = 0;
+            let totalCooperators = lattice.flat().filter(s => s === 1).length;
+            fcValues.push(totalCooperators / nn);
+            fcChart.data.datasets[0].data = fcValues;
+            fcChart.update('none');
+
+
+            const simulationStep = () => {
+                if (currentRound >= rounds || simulationTimerId === 'stopped') {
+                    document.getElementById('statusMessage').textContent = `Simulation finished successfully after ${currentRound} rounds.`;
+                    document.getElementById('statusMessage').className = "text-center text-sm font-semibold mt-2 p-2 rounded-lg bg-green-100 text-green-800";
+                    setUIState(false);
+                    return;
+                }
+                
+                currentRound++;
+                document.getElementById('currentRound').textContent = currentRound;
+
+                let payoffs = Array.from({ length: n }, () => Array(n).fill(0));
+                let new_lattice = Array.from({ length: n }, () => Array(n).fill(0));
+                let cooperator_count = 0;
+
+                // --- 2. Calculate Payoffs for Current Lattice (8-Neighbors) ---
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        let total_payoff = 0;
+                        const strategy = lattice[i][j];
+
+                        for (const [di, dj] of NEIGHBORS) {
+                            let ni = i + di;
+                            let nj = j + dj;
+
+                            // Torus boundary conditions (wrapping around)
+                            if (ni < 0) ni = n - 1;
+                            if (ni >= n) ni = 0;
+                            if (nj < 0) nj = n - 1;
+                            if (nj >= n) nj = 0;
+
+                            const neighborStrategy = lattice[ni][nj];
+                            // Payoff lookup: PAYOFF_MATRIX[my_strategy-1][opponent_strategy-1]
+                            total_payoff += PAYOFF_MATRIX[strategy - 1][neighborStrategy - 1];
+                        }
+                        payoffs[i][j] = total_payoff;
+                    }
+                }
+
+                // --- 3. Update Strategies (Imitation Rule) ---
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n; j++) {
+                        let max_payoff = payoffs[i][j];
+                        let best_strategy = lattice[i][j];
+
+                        // Check neighbors (including self, as current player can stick to their own strategy)
+                        for (const [di, dj] of NEIGHBORS.concat([[0, 0]])) {
+                            let ni = i + di;
+                            let nj = j + dj;
+
+                            // Torus boundary conditions
+                            if (ni < 0) ni = n - 1;
+                            if (ni >= n) ni = 0;
+                            if (nj < 0) nj = n - 1;
+                            if (nj >= n) nj = 0;
+                            
+                            // If neighbor's payoff is strictly better, adopt their strategy
+                            if (payoffs[ni][nj] > max_payoff) {
+                                max_payoff = payoffs[ni][nj];
+                                best_strategy = lattice[ni][nj]; // Adopt the neighbor's strategy
+                            }
+                        }
+                        
+                        // New lattice is based on the best strategy found
+                        new_lattice[i][j] = best_strategy; 
+
+                        // Transition tracking
+                        const oldStrategy = lattice[i][j];
+                        const newStrategy = new_lattice[i][j];
+                        
+                        // Update Grid Visualization based on transition
+                        const transitionKey = `${newStrategy}_${oldStrategy}`; 
+                        const transitionClass = TRANSITIONS[transitionKey];
+                        const cellIndex = i * n + j;
+                        const cell = document.getElementById(`cell-${cellIndex}`);
+                        cell.className = `cell ${transitionClass}`;
+
+                        if (newStrategy === 1) {
+                            cooperator_count++;
+                        }
+                    }
+                }
+
+                // --- 4. Update Lattice, f_c, and Visualization ---
+                lattice = new_lattice;
+                const fc = cooperator_count / nn;
+                fcValues.push(fc);
+
+                // Update Chart
+                fcChart.data.datasets[0].data.push(fc);
+                fcChart.update('none'); 
+
+                // Loop for the next round
+                simulationTimerId = setTimeout(simulationStep, delay); 
+            };
+            
+            // Start the loop
+            simulationTimerId = setTimeout(simulationStep, delay);
+        }
+
+        // Initialize UI state on load
+        window.onload = function() {
+            setUIState(false);
+            // Pre-create a simple canvas for Chart.js even if not fully initialized
+            const rounds = parseInt(document.getElementById('roundsInput').value);
+            initializeChart(rounds);
+        };
+    </script>
+</body>
+</html>
